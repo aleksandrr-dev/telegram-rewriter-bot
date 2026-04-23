@@ -9,8 +9,8 @@ A powerful bilingual Telegram bot that translates and rewrites text using a loca
   - ✏️ **Rewrite** — rewrite text in a chosen style without changing language
   - 🔄 **Translate + Rewrite** — translate AND rewrite in a chosen style simultaneously
 
-- **38 supported languages** including:
-  - Modern: English, Russian, Spanish, French, German, Italian, Portuguese, Dutch, Polish, Japanese, Chinese, Korean, Arabic, Turkish, Swedish, Norwegian, Danish, Finnish, Belarusian, Czech, Hindi, Persian
+- **40 supported languages** including:
+  - Modern: English, Russian, Spanish, French, German, Italian, Portuguese, Dutch, Polish, Japanese, Chinese, Korean, Arabic, Turkish, Swedish, Norwegian, Danish, Finnish, Belarusian, Czech, Hindi, Persian, Vietnamese, Thai
   - Ancient & Classical: Latin, Ancient Greek, Koine Greek, Biblical Hebrew, Aramaic, Sanskrit, Sumerian, Proto-Indo-European, Old Norse, Old English, Old Russian, Church Slavonic, Scythian, Ossetian
   - Constructed: Elvish (Sindarin)
 
