@@ -264,7 +264,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             result = await translate_text(text, user_lang)
             keyboard = [[InlineKeyboardButton('🔄 Full Menu / Полное меню', callback_data='show_menu')]]
             await update.message.reply_text(
-                f"✅ {user_lang}:*\n\n{result}",
+                f"✅ {user_lang}:\n\n{result}",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
         except Exception as e:
