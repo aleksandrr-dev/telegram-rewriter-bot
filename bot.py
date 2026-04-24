@@ -1,11 +1,9 @@
-# Local development only - remove before deploying
-from dotenv import load_dotenv
-load_dotenv()
-
 import asyncio
 import logging
 import json
 import os
+from dotenv import load_dotenv
+load_dotenv()
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from openai import OpenAI
@@ -31,7 +29,6 @@ STYLES = ['Formal', 'Casual', 'Funny', 'Aggressive', 'Poetic']
 LANGUAGES_PER_PAGE = 5
 LANG_LIST = list(SUPPORTED_LANGUAGES.keys())
 
-# User preferences storage
 PREFS_FILE = 'user_prefs.json'
 
 def load_prefs():
@@ -84,6 +81,7 @@ def get_setlang_keyboard(page=0):
         nav.append(InlineKeyboardButton('Next ➡️', callback_data=f'setlang_page_{page+1}'))
     if nav:
         keyboard.append(nav)
+    keyboard.append([InlineKeyboardButton('🔍 Search / Поиск', callback_data='search_setlang')])
     return InlineKeyboardMarkup(keyboard)
 
 def get_mode_keyboard():
@@ -152,7 +150,7 @@ async def mylang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     else:
         await update.message.reply_text(
-            "You haven't set a preferred language yet. / Вы ещё не выбрали язык.\n\nUse /setlang to set one!",
+            "You haven't set a preferred language yet. / Вы ещё не выбрали язык.\n\nUse /setlang to set one!"
         )
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -160,13 +158,23 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
 
-    # Handle setlang pagination
+    if data == 'show_menu':
+        await query.edit_message_text(
+            "Choose a mode / Выберите режим:",
+            reply_markup=get_mode_keyboard()
+        )
+        return
+
     if data.startswith('setlang_page_'):
         page = int(data.split('_')[2])
         await query.edit_message_reply_markup(reply_markup=get_setlang_keyboard(page))
         return
 
-    # Handle setlang selection
+    if data == 'search_setlang':
+        context.user_data['searching_setlang'] = True
+        await query.edit_message_text("Type a language name / Введите название языка:")
+        return
+
     if data.startswith('setlang_'):
         lang = data.split('_', 1)[1]
         set_user_lang(update.effective_user.id, lang)
@@ -212,9 +220,28 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("Choose target language / Выберите язык:", reply_markup=get_language_keyboard())
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message.text:
+        await update.message.reply_text(
+            "📝 Please send plain text to translate.\n\n"
+            "Пожалуйста, отправьте обычный текст для перевода.\n\n"
+            "💡 Image translation coming soon! / Перевод изображений скоро!"
+        )
+        return
+
     text = update.message.text
 
-    # Handle language search
+    if context.user_data.get('searching_setlang'):
+        search_term = text.lower()
+        matches = [lang for lang in LANG_LIST if search_term in lang.lower()]
+        if matches:
+            keyboard = [[InlineKeyboardButton(lang, callback_data=f'setlang_{lang}')] for lang in matches]
+            keyboard.append([InlineKeyboardButton('🔍 Search again / Искать снова', callback_data='search_setlang')])
+            await update.message.reply_text("Results / Результаты:", reply_markup=InlineKeyboardMarkup(keyboard))
+        else:
+            await update.message.reply_text("No results / Нет результатов. Try again / Попробуйте снова.")
+        context.user_data['searching_setlang'] = False
+        return
+
     if context.user_data.get('searching_language'):
         search_term = text.lower()
         matches = [lang for lang in LANG_LIST if search_term in lang.lower()]
@@ -227,7 +254,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['searching_language'] = False
         return
 
-    # Quick translate using saved language
     user_lang = get_user_lang(update.effective_user.id)
     mode = context.user_data.get('mode')
 
@@ -249,7 +275,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not mode:
         await update.message.reply_text(
-            "Please use /start to choose a mode, or /setlang to set your preferred language for instant translations.",
+            "Please use /start to choose a mode, or /setlang to set your preferred language for instant translations."
         )
         return
 
