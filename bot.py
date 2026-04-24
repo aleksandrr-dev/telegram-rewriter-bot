@@ -2,7 +2,7 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from openai import OpenAI
-import config
+import os
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ def get_style_keyboard():
     return InlineKeyboardMarkup(keyboard)
 
 async def translate_text(text, target_lang, style=None):
-    client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=config.GROQ_API_KEY)
+    client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=os.environ.get('GROQ_API_KEY'))
     if style:
         prompt = f"You are a professional translator. First translate the following text into {target_lang} language, then rewrite it in a {style} style. Your entire response must be written in {target_lang} only. Return only the final result with no explanations:\n\n{text}"
     else:
@@ -68,7 +68,7 @@ async def translate_text(text, target_lang, style=None):
     return response.choices[0].message.content
 
 async def rewrite_text(text, style):
-    client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=config.GROQ_API_KEY)
+    client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=os.environ.get('GROQ_API_KEY'))
     prompt = f"Rewrite the following text in a {style} style. Keep the same language. Return only the rewritten text:\n\n{text}"
     response = client.chat.completions.create(
         model="llama-3.1-8b-instant",
@@ -166,7 +166,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Error occurred. Please try again. / Произошла ошибка. Попробуйте снова.")
 
 def main():
-    application = Application.builder().token(config.BOT_TOKEN).build()
+    application = Application.builder().token(os.environ.get('BOT_TOKEN')).build()
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
