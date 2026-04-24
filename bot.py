@@ -58,10 +58,10 @@ def get_style_keyboard():
 async def translate_text(text, target_lang, style=None):
     client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=config.GROQ_API_KEY)
     if style:
-        prompt = f"You are a professional translator. Translate the following text into {target_lang} language in a {style} style. Your response must be written entirely in {target_lang}. Return only the translated text with no explanations:\n\n{text}"
+        prompt = f"You are a professional translator. First translate the following text into {target_lang} language, then rewrite it in a {style} style. Your entire response must be written in {target_lang} only. Return only the final result with no explanations:\n\n{text}"
     else:
         prompt = f"You are a professional translator. Translate the following text into {target_lang} language. Your response must be written entirely in {target_lang}. Return only the translated text with no explanations:\n\n{text}"
-        response = client.chat.completions.create(
+    response = client.chat.completions.create(
         model="llama-3.1-8b-instant",
         messages=[{"role": "user", "content": prompt}]
     )
