@@ -56,22 +56,22 @@ def get_style_keyboard():
     return InlineKeyboardMarkup(keyboard)
 
 async def translate_text(text, target_lang, style=None):
-    client = OpenAI(base_url="http://localhost:1234/v1", api_key="lm-studio")
+    client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=config.GROQ_API_KEY)
     if style:
-        prompt = f"Translate the following text to {target_lang} in a {style} style. Return only the translated text:\n\n{text}"
+        prompt = f"You are a professional translator. Translate the following text into {target_lang} language in a {style} style. Your response must be written entirely in {target_lang}. Return only the translated text with no explanations:\n\n{text}"
     else:
-        prompt = f"Translate the following text to {target_lang}. Return only the translated text:\n\n{text}"
-    response = client.chat.completions.create(
-        model="local-model",
+        prompt = f"You are a professional translator. Translate the following text into {target_lang} language. Your response must be written entirely in {target_lang}. Return only the translated text with no explanations:\n\n{text}"
+        response = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
         messages=[{"role": "user", "content": prompt}]
     )
     return response.choices[0].message.content
 
 async def rewrite_text(text, style):
-    client = OpenAI(base_url="http://localhost:1234/v1", api_key="lm-studio")
+    client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=config.GROQ_API_KEY)
     prompt = f"Rewrite the following text in a {style} style. Keep the same language. Return only the rewritten text:\n\n{text}"
     response = client.chat.completions.create(
-        model="local-model",
+        model="llama-3.1-8b-instant",
         messages=[{"role": "user", "content": prompt}]
     )
     return response.choices[0].message.content
@@ -118,6 +118,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['style'] = style
         mode = context.user_data.get('mode')
         if mode == 'rewrite':
+            await query.edit_message_text("Send me the text / Отправьте текст:")
+        elif mode == 'both' and context.user_data.get('target_lang'):
             await query.edit_message_text("Send me the text / Отправьте текст:")
         else:
             await query.edit_message_text("Choose target language / Выберите язык:", reply_markup=get_language_keyboard())
