@@ -9,7 +9,6 @@ import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from openai import OpenAI
-import config
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -233,6 +232,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mode = context.user_data.get('mode')
 
     if not mode and user_lang:
+        context.user_data.clear()
         await update.message.reply_text(f"⏳ Translating to {user_lang}...")
         try:
             result = await translate_text(text, user_lang)
