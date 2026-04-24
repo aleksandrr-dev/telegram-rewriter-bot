@@ -1,8 +1,11 @@
+import asyncio
 import logging
+import json
+import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from openai import OpenAI
-import os
+import config
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,6 +28,28 @@ STYLES = ['Formal', 'Casual', 'Funny', 'Aggressive', 'Poetic']
 LANGUAGES_PER_PAGE = 5
 LANG_LIST = list(SUPPORTED_LANGUAGES.keys())
 
+# User preferences storage
+PREFS_FILE = 'user_prefs.json'
+
+def load_prefs():
+    if os.path.exists(PREFS_FILE):
+        with open(PREFS_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+def save_prefs(prefs):
+    with open(PREFS_FILE, 'w') as f:
+        json.dump(prefs, f)
+
+def get_user_lang(user_id):
+    prefs = load_prefs()
+    return prefs.get(str(user_id))
+
+def set_user_lang(user_id, lang):
+    prefs = load_prefs()
+    prefs[str(user_id)] = lang
+    save_prefs(prefs)
+
 def get_language_keyboard(page=0):
     keyboard = []
     start = page * LANGUAGES_PER_PAGE
@@ -42,6 +67,22 @@ def get_language_keyboard(page=0):
     keyboard.append([InlineKeyboardButton('🔍 Search / Поиск', callback_data='search_lang')])
     return InlineKeyboardMarkup(keyboard)
 
+def get_setlang_keyboard(page=0):
+    keyboard = []
+    start = page * LANGUAGES_PER_PAGE
+    end = start + LANGUAGES_PER_PAGE
+    page_langs = LANG_LIST[start:end]
+    for lang in page_langs:
+        keyboard.append([InlineKeyboardButton(lang, callback_data=f'setlang_{lang}')])
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton('⬅️ Back', callback_data=f'setlang_page_{page-1}'))
+    if end < len(LANG_LIST):
+        nav.append(InlineKeyboardButton('Next ➡️', callback_data=f'setlang_page_{page+1}'))
+    if nav:
+        keyboard.append(nav)
+    return InlineKeyboardMarkup(keyboard)
+
 def get_mode_keyboard():
     keyboard = [
         [InlineKeyboardButton('🌍 Translate / Перевести', callback_data='mode_translate')],
@@ -52,7 +93,6 @@ def get_mode_keyboard():
 
 def get_style_keyboard():
     keyboard = [[InlineKeyboardButton(style, callback_data=f'style_{style}')] for style in STYLES]
-    keyboard.append([InlineKeyboardButton('🏠 Main Menu / Главное меню', callback_data='home')])
     return InlineKeyboardMarkup(keyboard)
 
 async def translate_text(text, target_lang, style=None):
@@ -78,15 +118,61 @@ async def rewrite_text(text, style):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
+    user_lang = get_user_lang(update.effective_user.id)
     await update.message.reply_text(
-        "👋 Welcome! / Добро пожаловать!\n\nChoose a mode / Выберите режим:",
-        reply_markup=get_mode_keyboard()
+        f"👋 Welcome to StyleRewriter AI!\n\n"
+        f"📌 *Quick commands:*\n"
+        f"/setlang — save your language for instant translations\n"
+        f"/mylang — see your saved language\n\n"
+        f"📖 *Modes:*\n"
+        f"🌍 Translate — translate to any language\n"
+        f"✏️ Rewrite — change writing style\n"
+        f"🔄 Translate + Rewrite — both at once\n\n"
+        f"{'⚡ Your quick language: *' + user_lang + '* — just send text to translate instantly!' if user_lang else '💡 Set your language with /setlang for instant translations!'}",
+        reply_markup=get_mode_keyboard(),
+        parse_mode='Markdown'
     )
+
+async def setlang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['setting_lang'] = True
+    await update.message.reply_text(
+        "🌍 Choose your preferred language / Выберите предпочитаемый язык:\n\nThis will be used for instant translations when you send text directly.",
+        reply_markup=get_setlang_keyboard()
+    )
+
+async def mylang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_lang = get_user_lang(update.effective_user.id)
+    if user_lang:
+        await update.message.reply_text(
+            f"🌍 Your saved language / Ваш сохранённый язык: *{user_lang}*\n\nJust send any text to translate it instantly!\nUse /setlang to change it.",
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(
+            "You haven't set a preferred language yet. / Вы ещё не выбрали язык.\n\nUse /setlang to set one!",
+        )
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
+
+    # Handle setlang pagination
+    if data.startswith('setlang_page_'):
+        page = int(data.split('_')[2])
+        await query.edit_message_reply_markup(reply_markup=get_setlang_keyboard(page))
+        return
+
+    # Handle setlang selection
+    if data.startswith('setlang_'):
+        lang = data.split('_', 1)[1]
+        set_user_lang(update.effective_user.id, lang)
+        context.user_data['setting_lang'] = False
+        await query.edit_message_text(
+            f"✅ Saved! / Сохранено!\n\nYour preferred language is now *{lang}*.\n\nJust send any text and I'll translate it instantly! Use /setlang to change anytime.",
+            parse_mode='Markdown'
+        )
+        return
 
     if data.startswith('mode_'):
         context.user_data['mode'] = data.split('_')[1]
@@ -119,14 +205,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mode = context.user_data.get('mode')
         if mode == 'rewrite':
             await query.edit_message_text("Send me the text / Отправьте текст:")
-        elif mode == 'both' and context.user_data.get('target_lang'):
-            await query.edit_message_text("Send me the text / Отправьте текст:")
         else:
             await query.edit_message_text("Choose target language / Выберите язык:", reply_markup=get_language_keyboard())
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    
+
+    # Handle language search
     if context.user_data.get('searching_language'):
         search_term = text.lower()
         matches = [lang for lang in LANG_LIST if search_term in lang.lower()]
@@ -139,9 +224,29 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['searching_language'] = False
         return
 
+    # Quick translate using saved language
+    user_lang = get_user_lang(update.effective_user.id)
     mode = context.user_data.get('mode')
+
+    if not mode and user_lang:
+        await update.message.reply_text(f"⏳ Translating to {user_lang}...")
+        try:
+            result = await translate_text(text, user_lang)
+            keyboard = [[InlineKeyboardButton('🔄 Full Menu / Полное меню', callback_data='show_menu')]]
+            await update.message.reply_text(
+                f"✅ *{user_lang}:*\n\n{result}",
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except Exception as e:
+            logger.error(f"Error: {e}")
+            await update.message.reply_text("❌ Error occurred. Please try again.")
+        return
+
     if not mode:
-        await update.message.reply_text("Please use /start to begin. / Используйте /start для начала.")
+        await update.message.reply_text(
+            "Please use /start to choose a mode, or /setlang to set your preferred language for instant translations.",
+        )
         return
 
     target_lang = context.user_data.get('target_lang')
@@ -168,6 +273,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     application = Application.builder().token(os.environ.get('BOT_TOKEN')).build()
     application.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('setlang', setlang_command))
+    application.add_handler(CommandHandler('mylang', mylang_command))
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.run_polling()
