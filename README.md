@@ -17,7 +17,7 @@ A powerful bilingual Telegram bot that translates and rewrites text using a loca
 - **5 writing styles:** Formal, Casual, Funny, Aggressive, Poetic
 - **Bilingual interface** — all menus and buttons in English and Russian
 - **Fully private** — powered by a local LLM, no data sent to external servers
-- **Paginated language selection** — clean navigation through all 38 languages
+- **Paginated language selection** — clean navigation through all 40 languages
 
 ## Requirements
 
